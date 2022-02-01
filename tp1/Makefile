@@ -13,8 +13,14 @@ SendUDP: SendUDP.o
 SendUDP.o : SendUDP.c
 	$(CC) $(CFLAGS) -c $^
 
+DNS: DNS.o
+	$(CC) $(CFLAGS) -o $@ $^
+
+DNS.o: DNS.c
+	$(CC) $(CFLAGS) -c $^
+
 DNSsimple : DNSsimple.c
 	$(CC) $? -o $@
 
 clean :
-	rm -f *.o ReceiveUDP SendUDP DNSsimple
+	rm -f *.o DNS ReceiveUDP SendUDP DNSsimple
