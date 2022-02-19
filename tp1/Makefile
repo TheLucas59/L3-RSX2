@@ -1,6 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
 
+all: ReceiveUDP SendUDP DNS DNSsimple
+
 ReceiveUDP: ReceiveUDP.o
 	$(CC) $(CFLAGS) -o $@ $^
 
