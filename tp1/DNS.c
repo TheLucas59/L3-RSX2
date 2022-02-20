@@ -11,6 +11,12 @@
 #define DNS_ADDR "193.49.225.15"
 #define BUFFER_SIZE 1024
 #define REQUEST_LENGTH 29
+#define QDCOUNT_INDEX 4
+#define ANCOUNT_INDEX 6
+#define DNS_HEADER_LENGTH 12
+#define IP_ADDRESS_LENGTH 4
+#define TYPE_A 1
+#define CLASS_IN 1
 
 void sendDNSRequest(int socket_dns, struct sockaddr_in dest) {
     const char request[REQUEST_LENGTH] = {
@@ -28,6 +34,83 @@ void sendDNSRequest(int socket_dns, struct sockaddr_in dest) {
         perror("sendto");
         exit(EXIT_FAILURE);
     }
+}
+
+char * analyseDNSResponse(unsigned char* buffer) {
+    int QDCount = (buffer[QDCOUNT_INDEX] << 8) + buffer[QDCOUNT_INDEX+1];
+    int ANCount = (buffer[ANCOUNT_INDEX] << 8) + buffer[ANCOUNT_INDEX+1];
+    int pos = DNS_HEADER_LENGTH;
+    
+    int cpt = 0;
+    //Question section
+    //QNAME : variable length
+    while(cpt < QDCount) {
+        for(; pos < BUFFER_SIZE; pos++) {
+            if(buffer[pos] == 0x00) {
+                break;
+            }
+            else {
+                pos += buffer[pos];
+            }
+        }
+
+        //QTYPE et QCLASS : 2 bytes
+        pos += 4;
+        cpt++;
+    }
+    pos++;
+
+    //Answer section
+    cpt = 0;
+    while(cpt < ANCount) {
+        int val = buffer[pos];
+        //NAME : variable length
+        if( (val & 1<<7) && (val & 1<<6) ) {
+            //pointer on 2 bytes
+            pos +=2;
+        }
+        else {
+            for(; pos < BUFFER_SIZE; pos++) {
+                if(buffer[pos] == 0x00) {
+                    break;
+                }
+                else {
+                    pos += buffer[pos];
+                }
+            }
+        }
+        //TYPE : 2 bytes
+        int type = (buffer[pos] << 8) + buffer[pos+1];
+        pos += 2;
+
+        //CLASS : 2 bytes
+        int class = (buffer[pos] << 8) + buffer[pos+1];
+        pos += 2;
+
+        //TTL : 4 bytes
+        pos += 4;
+
+        //RDLENGTH : 2 bytes
+        int length = (buffer[pos] << 8) + buffer[pos+1];
+        pos += 2;
+
+        //RDATA if it contains ip address
+        if(length == 4 && type == TYPE_A && class == CLASS_IN) {
+            int addressBytes[IP_ADDRESS_LENGTH];
+            for(int i = 0; i < IP_ADDRESS_LENGTH; i++) {
+                addressBytes[i] = buffer[pos];
+                pos++;
+            }
+            char * ip_address = malloc(16*sizeof(char));
+            sprintf(ip_address, "%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
+            return ip_address;
+        }
+        else {
+            pos += length;
+        }
+        cpt++;
+    }
+    return "No ip address found in this DNS response";
 }
 
 int main() {
@@ -55,7 +138,7 @@ int main() {
     struct sockaddr_in addrRecv;
     socklen_t addrRecvlen = sizeof(struct sockaddr_in);
 
-    char buffer[BUFFER_SIZE];
+    unsigned char buffer[BUFFER_SIZE];
     int received = 0;
 
     if ((received = recvfrom(socket_dns, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &addrRecv, &addrRecvlen)) == -1) {
@@ -63,34 +146,25 @@ int main() {
       exit(EXIT_FAILURE);
     }
 
-    printf(" - port  distant  : %hu\n", ntohs(addrRecv.sin_port));
-    printf(" - @IPv4 distante : %s\n", inet_ntoa(addrRecv.sin_addr));
-    printf("longueur du message recu : %u\n", received);
-
-    //printf("%s\n", buffer);
-
     printf("Message reçu.\n");
     close(socket_dns);
 
+    printf("Affichage de la trame en hexadecimal : \n");
+    int j = 0;
     for (int i = 0; i < received; i++) {
-
-        fprintf(stdout," %.2X", buffer[i] & 0xff);
-
-        if (((i+1)%16 == 0) || (i+1 == received)) {
-
-            /* ceci pour afficher les caracteres ascii apres l'hexa */
-            /* >>> */
-            for (int j = i+1 ; j < ((i+16) & ~15); j++) {
-            fprintf(stdout,"   ");
-            }
-            fprintf(stdout,"\t");
-            for (int j = i & ~15; j <= i; j++)
-            fprintf(stdout,"%c",buffer[j] > 31 && buffer[j] < 128 ? (char)buffer[j] : '.');
-            /* <<< */
-            fprintf(stdout,"\n");
+        printf("%.2X ", buffer[i]);
+        j++;
+        if(j == 15) {
+            printf("\n");
+            j = 0;
         }
     }
+    printf("\n");
 
+    char * ip_address = analyseDNSResponse(buffer);
+    printf("L'adresse IP du nom de domaine demandé est : ");
+    printf("%s\n", ip_address);
 
+    free(ip_address);
     return 0;
 }
