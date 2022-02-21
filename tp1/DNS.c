@@ -14,23 +14,65 @@
 #define QDCOUNT_INDEX 4
 #define ANCOUNT_INDEX 6
 #define DNS_HEADER_LENGTH 12
+#define DNS_END_LENGTH 4
 #define IP_ADDRESS_LENGTH 4
 #define TYPE_A 1
 #define CLASS_IN 1
+#define SEPARATOR '.'
 
-void sendDNSRequest(int socket_dns, struct sockaddr_in dest) {
-    const char request[REQUEST_LENGTH] = {
+unsigned char * concat(unsigned char *dest, const char *src, int n, int length) {
+    int i = 0;
+
+    for (; i < n; i++) {
+        dest[length + i] = src[i];
+    }
+
+    return dest;
+}
+
+void sendDNSRequest(int socket_dns, struct sockaddr_in dest, char* name) {
+    const char header[DNS_HEADER_LENGTH] = {
         0x08, 0xbb, 0x01, 0x00,    //entête
         0x00, 0x01, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x03, 0x77, 0x77, 0x77, //question    
-        0x04, 0x6c, 0x69, 0x66, //QNAME : 3"www" 4"lifl" 2"fr" 0 
-        0x6c, 0x02, 0x66, 0x72,
-        0x00,
+        0x00, 0x00, 0x00, 0x00
+    };
+
+    const char end[DNS_END_LENGTH] = {
         0x00, 0x01,                //Q-Type
         0x00, 0x01                 //Q-Class
     };
-    if( sendto(socket_dns, request, REQUEST_LENGTH, 0, (struct sockaddr*) &dest, sizeof(dest)) == -1) {
+
+    int name_full_length = strlen(name) + 1;
+    char qname[name_full_length];
+
+    int pos = 0;
+    char cptBeforeSeparator = 0x00;
+    for(int i = 0; i < name_full_length; i++) {
+        if(name[i] != SEPARATOR && name[i] != '\0') {
+            cptBeforeSeparator++;
+        }
+        else {
+            qname[pos] = cptBeforeSeparator;
+            int nextEnd = pos + cptBeforeSeparator;
+            pos++;
+            for(; pos <= nextEnd; pos++) {
+                qname[pos] = name[pos-1];
+            }
+            cptBeforeSeparator = 0x00;
+        }
+    }
+    qname[pos] = 0x00;
+
+
+    int request_size = DNS_HEADER_LENGTH + name_full_length + DNS_END_LENGTH + 1;
+    unsigned char* req = malloc(sizeof(char)* request_size);
+
+    concat(req, header, DNS_HEADER_LENGTH, 0);
+    concat(req, qname, name_full_length+1, DNS_HEADER_LENGTH);
+    concat(req, end, DNS_END_LENGTH, DNS_HEADER_LENGTH + name_full_length+1);
+    req[request_size] = 0x00;
+
+    if( sendto(socket_dns, req, request_size, 0, (struct sockaddr*) &dest, sizeof(dest)) == -1) {
         perror("sendto");
         exit(EXIT_FAILURE);
     }
@@ -113,7 +155,12 @@ char * analyseDNSResponse(unsigned char* buffer) {
     return "No ip address found in this DNS response";
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if(argc != 2) {
+        printf("Mauvais nombre d'arguments : utilisez le programme ainsi ./DNS <adresse_recherchée>.\n");
+        exit(EXIT_FAILURE);
+    }
+
     int socket_dns = socket(AF_INET, SOCK_DGRAM, 0);
     if(socket_dns == -1) {
         perror("socket");
@@ -132,7 +179,7 @@ int main() {
 
     dest.sin_addr.s_addr = adresseDest;
 
-    sendDNSRequest(socket_dns, dest);
+    sendDNSRequest(socket_dns, dest, argv[1]);
     printf("Message envoyé.\n");
 
     struct sockaddr_in addrRecv;
@@ -149,6 +196,7 @@ int main() {
     printf("Message reçu.\n");
     close(socket_dns);
 
+
     printf("Affichage de la trame en hexadecimal : \n");
     int j = 0;
     for (int i = 0; i < received; i++) {
@@ -161,8 +209,8 @@ int main() {
     }
     printf("\n");
 
-    char * ip_address = analyseDNSResponse(buffer);
-    printf("L'adresse IP du nom de domaine demandé est : ");
+    char* ip_address = analyseDNSResponse(buffer);
+    printf("L'adresse IP de %s est : ", argv[1]);
     printf("%s\n", ip_address);
 
     free(ip_address);
