@@ -17,6 +17,7 @@
 #define DNS_END_LENGTH 4
 #define IP_ADDRESS_LENGTH 4
 #define TYPE_A 1
+#define TYPE_CNAME 5
 #define CLASS_IN 1
 #define SEPARATOR '.'
 
@@ -30,7 +31,7 @@ unsigned char * concat(unsigned char *dest, const char *src, int n, int length) 
     return dest;
 }
 
-void sendDNSRequest(int socket_dns, struct sockaddr_in dest, char* name) {
+int sendDNSRequest(int socket_dns, struct sockaddr_in dest, char* name) {
     const char header[DNS_HEADER_LENGTH] = {
         0x08, 0xbb, 0x01, 0x00,    //entête
         0x00, 0x01, 0x00, 0x00,
@@ -72,35 +73,21 @@ void sendDNSRequest(int socket_dns, struct sockaddr_in dest, char* name) {
     concat(req, end, DNS_END_LENGTH, DNS_HEADER_LENGTH + name_full_length+1);
     req[request_size] = 0x00;
 
-    if( sendto(socket_dns, req, request_size, 0, (struct sockaddr*) &dest, sizeof(dest)) == -1) {
+    int length_sent = 0;
+    if( (length_sent = sendto(socket_dns, req, request_size, 0, (struct sockaddr*) &dest, sizeof(dest))) == -1) {
         perror("sendto");
         exit(EXIT_FAILURE);
     }
+
+    return length_sent;
 }
 
-char * analyseDNSResponse(unsigned char* buffer) {
+char * analyseDNSResponse(unsigned char* buffer, int length_sent) {
     int QDCount = (buffer[QDCOUNT_INDEX] << 8) + buffer[QDCOUNT_INDEX+1];
     int ANCount = (buffer[ANCOUNT_INDEX] << 8) + buffer[ANCOUNT_INDEX+1];
-    int pos = DNS_HEADER_LENGTH;
-    
-    int cpt = 0;
-    //Question section
-    //QNAME : variable length
-    while(cpt < QDCount) {
-        for(; pos < BUFFER_SIZE; pos++) {
-            if(buffer[pos] == 0x00) {
-                break;
-            }
-            else {
-                pos += buffer[pos];
-            }
-        }
+    int pos = length_sent;
 
-        //QTYPE et QCLASS : 2 bytes
-        pos += 4;
-        cpt++;
-    }
-    pos++;
+    int cpt = 0;
 
     //Answer section
     cpt = 0;
@@ -144,8 +131,12 @@ char * analyseDNSResponse(unsigned char* buffer) {
                 pos++;
             }
             char * ip_address = malloc(16*sizeof(char));
-            sprintf(ip_address, "%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
-            return ip_address;
+            printf("%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
+            /*sprintf(ip_address, "%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
+            return ip_address;*/
+        }
+        else if(type == TYPE_CNAME) {
+            
         }
         else {
             pos += length;
@@ -179,7 +170,7 @@ int main(int argc, char* argv[]) {
 
     dest.sin_addr.s_addr = adresseDest;
 
-    sendDNSRequest(socket_dns, dest, argv[1]);
+    int length_sent = sendDNSRequest(socket_dns, dest, argv[1]);
     printf("Message envoyé.\n");
 
     struct sockaddr_in addrRecv;
@@ -196,7 +187,6 @@ int main(int argc, char* argv[]) {
     printf("Message reçu.\n");
     close(socket_dns);
 
-
     printf("Affichage de la trame en hexadecimal : \n");
     int j = 0;
     for (int i = 0; i < received; i++) {
@@ -209,7 +199,7 @@ int main(int argc, char* argv[]) {
     }
     printf("\n");
 
-    char* ip_address = analyseDNSResponse(buffer);
+    char* ip_address = analyseDNSResponse(buffer, length_sent);
     printf("L'adresse IP de %s est : ", argv[1]);
     printf("%s\n", ip_address);
 
