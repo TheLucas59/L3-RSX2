@@ -21,6 +21,10 @@
 #define CLASS_IN 1
 #define SEPARATOR '.'
 
+int bitExtracted(int number, int n, int pos) {
+    return (((1 << n) - 1) & (number >> (pos - 1)));
+}
+
 unsigned char * concat(unsigned char *dest, const char *src, int n, int length) {
     int i = 0;
 
@@ -82,15 +86,13 @@ int sendDNSRequest(int socket_dns, struct sockaddr_in dest, char* name) {
     return length_sent;
 }
 
-char * analyseDNSResponse(unsigned char* buffer, int length_sent) {
-    int QDCount = (buffer[QDCOUNT_INDEX] << 8) + buffer[QDCOUNT_INDEX+1];
+void analyseDNSResponse(unsigned char* buffer, int length_sent) {
     int ANCount = (buffer[ANCOUNT_INDEX] << 8) + buffer[ANCOUNT_INDEX+1];
+    
     int pos = length_sent;
-
     int cpt = 0;
 
     //Answer section
-    cpt = 0;
     while(cpt < ANCount) {
         int val = buffer[pos];
         //NAME : variable length
@@ -112,6 +114,7 @@ char * analyseDNSResponse(unsigned char* buffer, int length_sent) {
         int type = (buffer[pos] << 8) + buffer[pos+1];
         pos += 2;
 
+
         //CLASS : 2 bytes
         int class = (buffer[pos] << 8) + buffer[pos+1];
         pos += 2;
@@ -123,6 +126,7 @@ char * analyseDNSResponse(unsigned char* buffer, int length_sent) {
         int length = (buffer[pos] << 8) + buffer[pos+1];
         pos += 2;
 
+
         //RDATA if it contains ip address
         if(length == 4 && type == TYPE_A && class == CLASS_IN) {
             int addressBytes[IP_ADDRESS_LENGTH];
@@ -130,20 +134,50 @@ char * analyseDNSResponse(unsigned char* buffer, int length_sent) {
                 addressBytes[i] = buffer[pos];
                 pos++;
             }
-            char * ip_address = malloc(16*sizeof(char));
-            printf("%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
-            /*sprintf(ip_address, "%d.%d.%d.%d", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
-            return ip_address;*/
+            printf("Adresse possible : %d.%d.%d.%d\n", addressBytes[0], addressBytes[1], addressBytes[2], addressBytes[3]);
         }
-        else if(type == TYPE_CNAME) {
-            
+        else if(type == TYPE_CNAME && class == CLASS_IN) {
+            char cnameBytes[BUFFER_SIZE];
+            int nbCharacterBeforeNextSeparator = 0;
+            int cnamePos = 0;
+            short cnameTerminatedByPointer = 0;
+            while(buffer[pos] != 0x00 && !cnameTerminatedByPointer) {
+                if( (buffer[pos] & 1<<7) && (buffer[pos] & 1<<6) ) {
+                    cnameTerminatedByPointer = 1;
+                    int name_field = (buffer[pos] << 8) + buffer[pos+1];
+                    int offset = bitExtracted(name_field, 14, 1);
+                    while(buffer[offset] != 0x00) {
+                        nbCharacterBeforeNextSeparator = buffer[offset];
+                        offset++;
+                        for(int i = 0; i < nbCharacterBeforeNextSeparator; i++) {
+                            cnameBytes[cnamePos] = buffer[offset];
+                            offset++;
+                            cnamePos++;
+                        }
+                        cnameBytes[cnamePos] = '.';
+                        cnamePos++;
+                    }
+                    pos += 2;
+                }
+                else {
+                    nbCharacterBeforeNextSeparator = buffer[pos];
+                    pos++;
+                    for(int i = 0; i < nbCharacterBeforeNextSeparator; i++) {
+                        cnameBytes[cnamePos] = buffer[pos];
+                        pos++;
+                        cnamePos++;
+                    }
+                    cnameBytes[cnamePos] = '.';
+                    cnamePos++;
+                }
+            }
+            printf("Alias pour : %s\n", cnameBytes);
         }
         else {
             pos += length;
         }
         cpt++;
     }
-    return "No ip address found in this DNS response";
 }
 
 int main(int argc, char* argv[]) {
@@ -199,10 +233,7 @@ int main(int argc, char* argv[]) {
     }
     printf("\n");
 
-    char* ip_address = analyseDNSResponse(buffer, length_sent);
-    printf("L'adresse IP de %s est : ", argv[1]);
-    printf("%s\n", ip_address);
+    analyseDNSResponse(buffer, length_sent);
 
-    free(ip_address);
     return 0;
 }
