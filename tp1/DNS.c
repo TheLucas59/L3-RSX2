@@ -181,8 +181,8 @@ void analyseDNSResponse(unsigned char* buffer, int length_sent) {
 }
 
 int main(int argc, char* argv[]) {
-    if(argc != 2) {
-        printf("Mauvais nombre d'arguments : utilisez le programme ainsi ./DNS <adresse_recherchée>.\n");
+    if(argc < 2 || argc > 3) {
+        printf("Mauvais nombre d'arguments : utilisez le programme ainsi ./DNS <adresse_recherchée> <adresse_serveur_DNS>.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -196,10 +196,24 @@ int main(int argc, char* argv[]) {
     dest.sin_family = AF_INET;
     dest.sin_port = htons(PORT);
 
-    in_addr_t adresseDest = inet_addr(DNS_ADDR);
-    if(adresseDest == INADDR_NONE) {
-        printf("Adresse IP invalide.\n");
-        exit(EXIT_FAILURE);
+    in_addr_t adresseDest;
+    if(argc == 3) {
+        adresseDest = inet_addr(argv[2]);
+        if(adresseDest == INADDR_NONE) {
+            adresseDest = inet_addr(DNS_ADDR);
+            if(adresseDest == INADDR_NONE) {
+                printf("Adresse IP invalide.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+    }
+    else {
+        adresseDest = inet_addr(DNS_ADDR);
+        if(adresseDest == INADDR_NONE) {
+            printf("Adresse IP invalide.\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     dest.sin_addr.s_addr = adresseDest;

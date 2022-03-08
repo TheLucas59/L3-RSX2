@@ -21,7 +21,7 @@ Pour recevoir un message en UDP :
 
 Pour envoyer une requête DNS :
 ```bash
-./DNS <nom_de_domaine>
+./DNS <nom_de_domaine> <adresse_serveur_DNS>
 ```
 
 Q1 : Pour réaliser les deux programmes permettant de communiquer avec des datagrammes UDP, il faut créer la socket, la lier avec l'adresse à laquelle on souhaite envoyer ou recevoir un message puis envoyer ou attendre de recevoir ce message.
@@ -33,6 +33,8 @@ Pour envoyer un message, il faut créer la socket ainsi qu'une structure `struct
 Pour recevoir un message, il faut créer les mêmes éléments que précédemment, avec l'adresse localhost et le port passé en paramètre. Il faut ensuite bind manuellement la socket à la structure car la fonction `recv` qui permet de recevoir le message juste après ne bind pas la socket directement, comme le fait `sendto`. Il faut utiliser une taille de buffer suffisamment grande pour recevoir correctement les messages, et suffisamment petite pour ne pas saturer la mémoire de l'ordinateur. Encore une fois, il ne faut pas oublier de fermer la socket avant de sortir du programme.
 
 Q2 : Pour réaliser la requête DNS, j'ai repris une grande partie du code donné en exemple pour bien comprendre comment les requêtes DNS fonctionnaient. Il faut de toute façon procéder de la même façon que précédemment avec une socket et une structure `struct sockaddr_in` pour envoyer et recevoir la requête.
+
+Il est possible de spécifier un serveur DNS spécifique en lançant le programme. Il faut donner l'adresse IP de ce serveur en 2e argument du programme. Si on ne donne pas cet argument ou que l'adresse n'est pas une adresse IpV4 valide, le programme utilisera un serveur DNS par défaut. Si cette adresse IP est valide mais qu'elle ne correspond pas à un serveur DNS, le programme restera bloqué après le message "Message envoyé" sur la sortie standard. Ce-dernier pourra envoyer le message, mais ne recevra aucune réponse. C'est pourquoi il restera bloqué.
 
 Q3 & Q4 : On récupère le datagramme de réponse grâce à la fonction `recv` qui range tout ce qu'elle reçoit dans un buffer. Il faut maintenant décortiquer la réponse octet par octer. La [RFC 1035](https://www.ietf.org/rfc/rfc1035.txt) section 4 décrit la structure d'un message DNS. Ce document m'a beaucoup aidé pour trouver les différents champs qui la composent ainsi que comment calculer la taille des champs variables.
 
