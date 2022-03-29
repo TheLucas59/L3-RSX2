@@ -183,4 +183,78 @@ network 211.230.193.192/30
 
 On voit sur la capture de trames qu'un message est passé sur l'interface eth0 de R1.
 
-Q2: Le protocole RIP appartient à la couche réseau de modèle OSI. Il utilise le protocole UDP. Les ports source et destination utilisés par RIP est uniquement le port 520. L'adresse de destination des messages est 224.0.0.9.
+Q2: Le protocole RIP appartient à la couche réseau de modèle OSI. Il utilise le protocole UDP. Les ports source et destination utilisés par RIP est uniquement le port 520. L'adresse de destination des messages est 224.0.0.9. C'est une adresse multicast utilisée par le protocole RIPv2.
+
+Q3: 
+![commande rip](./Screenshots/P4Q3.png)
+
+La commande RIP envoyé est de type "Request" et la version de RIP utilisé est la version 2.
+
+Q4:
+Pour activer RIP sur le réseau b on exécute sur R1 la commande suivante :
+```
+network 211.230.193.196/30
+```
+
+Je constate sur la capture de trames que des messages de type "Response" sont envoyés toutes les 30 secondes environ.
+
+![réponses](./Screenshots/P4Q4.png)
+
+
+Q5: 
+![contenu réponse sur a](./Screenshots/P4Q5.png)
+
+Les réponses envoyées sur a contiennent des informations relatives au réseau b.
+
+![contenu réponse sur b](./Screenshots/P4Q5(2).png)
+
+Les réponses envoyées sur b contiennent des informations relatives au réseau a.
+
+Q6: 
+Pour activer RIP sur les réseaux liés à R2 :
+```
+network 211.230.193.192/30
+network 211.230.193.0/25
+```
+
+Pour activer RIP sur les réseaux liés à R3 :
+```
+network 211.230.193.196/30
+network 211.230.193.128/25
+```
+
+Le message de requête permet aux routeurs de s'abonner à l'adresse multicast de RIP et de recevoir les messages de ce protocole.
+
+Q7:
+ 
+![table de routage rip R1](./Screenshots/P4Q7.png)
+
+La table de routage de R1 dit que pour accéder au réseau B, il faut passer par son interface eth1 en utilisant la passerelle eth0 de R3.
+
+![contenu des réponses envoyées par R1](./Screenshots/P4Q7(2).png)
+
+Dans les réponses que R1 envoie, on voit deux adresses : celle de B et celle de b. La métrique est incrémentée à chaque passage de routeur : le réseau b est donc accessible directement (métrique à 1) et B après le passage de la passerelle (métrique à 2).
+
+Q8: 
+La métrique associée au réseau A dans les annonces de R2 est de 1. La métrique associée au réseau A dans les annonces de R1 est de 2. Dans R3, la métrique associée au réseau A est probablement de 3. Il s'agit du nombre de passerelles à traverser pour accéder au réseau spécifié.
+
+Q9:
+
+![tables de routages des routeurs](./Screenshots/P4Q9.png)
+
+Les métriques des différentes routes correspondent à mes suppositions. Si on ajoutait un lien direct entre R2 et R3, la métrique vers A depuis R3 serait de 1.
+
+Q10:
+
+Les messages envoyés par R1 ne changent pas, cependant il reçoit des messages de la part de R2 lui donnant une métrique de 16 pour le réseau A. La valeur 16 est définie dans le protocole RIP pour signifier qu'un réseau est inaccessible. Dès l'instant où R1 reçoit le message de R2 lui signifiant que A est devenu inaccessible, il a propagé le message à R3 qui a pu mettre à jour sa table de routage directement.
+
+Q11:
+R1 a pris à peu près 2 minutes pour se rendre compte que R2 n'émettait plus de messages et donc que le réseau A est devenu inaccessible.
+
+Q12:
+
+![routeur pirate](./Screenshots/P4Q12.png)
+
+![R2](./Screenshots/P4Q12(2).png)
+
+Je n'observe aucun changement dans la table de routage de R2.
